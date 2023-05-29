@@ -1,22 +1,19 @@
 use std::time::{Duration, Instant};
-use ggez::audio::{SoundSource, Source};
 use ggez::{Context, event, GameResult, graphics};
 use ggez::glam::Vec2;
 use ggez::graphics::{Canvas, Color, DrawMode, DrawParam};
 use ggez::input::keyboard;
 use ggez::input::keyboard::KeyCode;
 use ggez::mint::Vector2;
-use rand::Rng;
 use crate::constants::{MILLIS_PER_FRAME, SCREEN_SIZE};
 use crate::food::Food;
 use crate::snake::{Direction, Snake};
-use crate::sounds::initialize_audio;
+use crate::sounds::Sounds;
 
 pub struct Game {
     snake: Snake,
     food: Food,
-    food_sounds: Vec<Source>,
-    music: Source,
+    sounds: Sounds,
     game_over: bool,
     last_update: Instant
 }
@@ -26,22 +23,20 @@ impl Game {
         Game {
             snake: Snake::new((SCREEN_SIZE.0 / 2) as i32, (SCREEN_SIZE.1 / 2) as i32),
             food: Food::new(),
-            food_sounds: initialize_audio(ctx),
-            music: Source::new(ctx, "\\sounds\\music.mp3").unwrap(),
+            sounds: Sounds::new(ctx),
             game_over: false,
             last_update: Instant::now()
         }
     }
 
-    fn handle_collision(ctx: &Context, snake: &mut Snake, food: &mut Food, food_sounds: &mut Vec<Source>) -> bool {
+    fn handle_collision(ctx: &Context, snake: &mut Snake, food: &mut Food, sounds: &mut Sounds) -> bool {
         let snake_head = snake.body[0];
 
         if snake_head.x == food.rect.x && snake_head.y == food.rect.y {
             food.move_food();
             snake.grow();
 
-            let sound_index = rand::thread_rng().gen_range(0..food_sounds.len());
-            food_sounds[sound_index].play_detached(ctx).unwrap();
+            sounds.play_food_sound(ctx);
         }
 
         for i in 1..snake.body.len() {
@@ -70,15 +65,13 @@ impl event::EventHandler for Game {
                 self.snake.move_segments();
                 self.last_update = Instant::now();
             } else {
-                self.music.stop(ctx).unwrap();
+                self.sounds.stop_music(ctx);
             }
         }
-        if !self.music.playing() {
-            self.music.set_repeat(true);
-            self.music.set_volume(0.5);
-            self.music.play(ctx).unwrap();
-        }
-        if !Game::handle_collision(ctx, &mut self.snake, &mut self.food, &mut self.food_sounds) {
+
+        self.sounds.play_music(ctx);
+
+        if !Game::handle_collision(ctx, &mut self.snake, &mut self.food, &mut self.sounds) {
             self.game_over = true;
         }
         Ok(())
