@@ -1,9 +1,8 @@
 use std::time::{Duration, Instant};
-use ggez::{Context, event, GameResult, graphics};
+use ggez::{Context, event, GameError, GameResult, graphics};
 use ggez::glam::Vec2;
-use ggez::graphics::{Canvas, Color, DrawMode, DrawParam};
-use ggez::input::keyboard;
-use ggez::input::keyboard::KeyCode;
+use ggez::graphics::{Canvas, Color, DrawMode, DrawParam, Rect};
+use ggez::input::keyboard::{KeyCode, KeyInput};
 use ggez::mint::Vector2;
 use crate::constants::{MILLIS_PER_FRAME, SCREEN_SIZE};
 use crate::food::Food;
@@ -14,8 +13,9 @@ pub struct Game {
     snake: Snake,
     food: Food,
     sounds: Sounds,
-    game_over: bool,
-    last_update: Instant
+    last_update: Instant,
+    paused: bool,
+    game_over: bool
 }
 
 impl Game {
@@ -24,13 +24,14 @@ impl Game {
             snake: Snake::new((SCREEN_SIZE.0 / 2) as i32, (SCREEN_SIZE.1 / 2) as i32),
             food: Food::new(),
             sounds: Sounds::new(ctx),
-            game_over: false,
-            last_update: Instant::now()
+            last_update: Instant::now(),
+            paused: false,
+            game_over: false
         }
     }
 
     fn handle_collision(ctx: &Context, snake: &mut Snake, food: &mut Food, sounds: &mut Sounds) -> bool {
-        let snake_head = snake.body[0];
+        let snake_head: Rect = snake.body[0];
 
         if snake_head.x == food.rect.x && snake_head.y == food.rect.y {
             food.move_food();
@@ -52,24 +53,14 @@ impl Game {
 impl event::EventHandler for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         if Instant::now() - self.last_update >= Duration::from_millis(MILLIS_PER_FRAME) {
-            if !&self.game_over {
-                if keyboard::is_key_pressed(ctx, KeyCode::Up) && self.snake.direction != Direction::DOWN {
-                    self.snake.direction = Direction::UP;
-                } else if keyboard::is_key_pressed(ctx, KeyCode::Down) && self.snake.direction != Direction::UP {
-                    self.snake.direction = Direction::DOWN;
-                } else if keyboard::is_key_pressed(ctx, KeyCode::Left) && self.snake.direction != Direction::RIGHT {
-                    self.snake.direction = Direction::LEFT;
-                } else if keyboard::is_key_pressed(ctx, KeyCode::Right) && self.snake.direction != Direction::LEFT {
-                    self.snake.direction = Direction::RIGHT;
-                }
+            if !self.game_over {
+                self.sounds.play_music(ctx);
                 self.snake.move_segments();
                 self.last_update = Instant::now();
             } else {
                 self.sounds.stop_music(ctx);
             }
         }
-
-        self.sounds.play_music(ctx);
 
         if !Game::handle_collision(ctx, &mut self.snake, &mut self.food, &mut self.sounds) {
             self.game_over = true;
@@ -94,6 +85,32 @@ impl event::EventHandler for Game {
         }
 
         canvas.finish(ctx)?;
+        Ok(())
+    }
+
+    fn key_down_event(&mut self, _ctx: &mut Context, input: KeyInput, _repeated: bool) -> Result<(), GameError> {
+        let register_actions: bool = !self.paused && !self.game_over;
+
+        if let Some(key) = input.keycode {
+            if key == KeyCode::Up && self.snake.direction != Direction::DOWN && register_actions {
+                self.snake.direction = Direction::UP;
+            } else if key == KeyCode::Down && self.snake.direction != Direction::UP && register_actions {
+                self.snake.direction = Direction::DOWN;
+            } else if key == KeyCode::Left && self.snake.direction != Direction::RIGHT && register_actions {
+                self.snake.direction = Direction::LEFT;
+            } else if key == KeyCode::Right && self.snake.direction != Direction::LEFT && register_actions {
+                self.snake.direction = Direction::RIGHT;
+            } else if !self.game_over && key == KeyCode::Escape {
+                self.paused = !self.paused;
+            }
+            // } else if key == KeyCode::Q && (self.paused || self.game_over) {
+            //     //save::save_high_score(self.score.score);
+            //     ctx.request_quit();
+            // } else if key == KeyCode::R && self.game_over {
+            //     save::save_high_score(self.score.score);
+            //     self.handle_reset(ctx);
+            // }
+        }
         Ok(())
     }
 }
